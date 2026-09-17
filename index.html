@@ -274,22 +274,23 @@
   #distTicker .hud-value{font-size:clamp(22px,calc(var(--frame-w) * 0.05),30px);}
 
   #rockWarning{
-    position:absolute; top:calc(56px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    position:absolute; top:calc(66px + env(safe-area-inset-top)); left:14px;
     z-index:5; pointer-events:none;
-    font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.05em;
-    font-size:clamp(14px,calc(var(--frame-w) * 0.036),18px); color:#2b1000;
+    font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.04em;
+    font-size:clamp(12px,calc(var(--frame-w) * 0.028),15px); color:#2b1000;
     background:linear-gradient(180deg,#ffd23f,#ff7a1a);
     border:2px solid #fff3c4;
     border-radius:8px;
-    padding:6px 16px;
+    padding:5px 12px;
+    max-width:150px;
     box-shadow:0 4px 14px rgba(0,0,0,.4);
     opacity:0; transition:opacity .15s ease;
     animation:rockWarnPulse .5s ease-in-out infinite;
   }
   #rockWarning.show{opacity:1;}
   @keyframes rockWarnPulse{
-    0%,100%{transform:translateX(-50%) scale(1);}
-    50%{transform:translateX(-50%) scale(1.06);}
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.06);}
   }
 
   #crashFlash{
@@ -340,6 +341,12 @@
   }
   #trialLock.show{display:flex;}
   #trialLock svg{width:60px;height:60px;color:var(--yellow);}
+  #updateOverlay{
+    position:fixed; inset:0; z-index:9500;
+    background:rgba(10,8,6,.85);
+    display:none; align-items:center; justify-content:center;
+  }
+  #updateOverlay.show{display:flex;}
 </style>
 </head>
 <body>
@@ -354,6 +361,19 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
   <div class="display" style="font-size:24px;">Update Needed</div>
   <div style="color:#c9b9a3;font-size:15px;max-width:300px;">Add new car and road</div>
+</div>
+
+<div id="updateOverlay">
+  <div class="panel" style="width:min(300px,88%);padding:26px 24px 22px;">
+    <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="var(--yellow)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><polyline points="21 3 21 9 15 9"/></svg>
+    <div class="eyebrow">UPDATE AVAILABLE</div>
+    <div class="display" style="font-size:22px;margin:4px 0 10px;">Ridge Runner v<span id="updateVersionLabel">1.1.0</span></div>
+    <div style="color:#c9b9a3;font-size:14px;margin-bottom:6px;">New hills, rocks &amp; fixes</div>
+    <div style="color:var(--yellow);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;margin-bottom:16px;">
+      Download size: <span id="updateSizeLabel">5.1</span> MB
+    </div>
+    <button class="btn" id="updateNowBtn" style="width:100%;">Update Now</button>
+  </div>
 </div>
 
 <div id="gameFrame">
@@ -381,7 +401,7 @@
   <div class="hud-value"><span id="distVal">0</span> m</div>
 </div>
 
-<div id="rockWarning">⚠ ROCK AHEAD — GAIN SPEED!</div>
+<div id="rockWarning">⚠ ROCK AHEAD!</div>
 
 <div id="hud">
   <div class="hud-panel" id="fuelWrap">
@@ -607,9 +627,9 @@ const LANDING_ABSORB = 0.18;   // how much velocity survives a landing impact
 const rpmNeedleEl = document.getElementById('rpmNeedle');
 
 const DIFFICULTY = {
-  easy:   { startAmp:14, maxAmp:34,  ampGrow:5200, flatChance:0.34, clamp:80 },
-  normal: { startAmp:22, maxAmp:50,  ampGrow:3400, flatChance:0.16, clamp:105 },
-  hard:   { startAmp:42, maxAmp:92,  ampGrow:1400, flatChance:0.04, clamp:165 },
+  easy:   { startAmp:14, maxAmp:34,  ampGrow:5200, flatChance:0.34, clamp:80,  rockHeight:8 },
+  normal: { startAmp:22, maxAmp:50,  ampGrow:3400, flatChance:0.16, clamp:105, rockHeight:12 },
+  hard:   { startAmp:42, maxAmp:92,  ampGrow:1400, flatChance:0.04, clamp:165, rockHeight:16 },
 };
 let difficulty = 'normal';
 
@@ -679,6 +699,37 @@ const safeStorage = {
     window.__trialExpired = true;
   }
 })();
+
+/* ---------------- Update check (Play-Store style "update available" prompt) ----------------
+   Bump GAME_VERSION and UPDATE_SIZE_MB here whenever you ship a new build. The first time a
+   player's browser sees a version number different from what it saw last, it shows an "Update
+   Available" prompt asking them to confirm before continuing — same pattern as an app store
+   update gate. Nothing is actually downloaded here (this file already IS the new version by the
+   time it's running), so tapping Update just acknowledges it and lets them in. ---------------- */
+const GAME_VERSION = '1.2.0';
+const UPDATE_SIZE_MB = '5.1';
+(function(){
+  if(window.__trialExpired) return; // don't stack prompts on top of the trial lock screen
+  const seenVersion = safeStorage.getItem('ridgeRunnerVersion');
+  if(seenVersion && seenVersion !== GAME_VERSION){
+    document.getElementById('updateSizeLabel').textContent = UPDATE_SIZE_MB;
+    document.getElementById('updateVersionLabel').textContent = GAME_VERSION;
+    document.getElementById('updateOverlay').classList.add('show');
+    document.getElementById('gameFrame').style.display = 'none';
+    window.__updatePending = true;
+  } else if(!seenVersion){
+    safeStorage.setItem('ridgeRunnerVersion', GAME_VERSION); // first-ever launch, nothing to update from
+  }
+})();
+document.getElementById('updateNowBtn').addEventListener('click', ()=>{
+  safeStorage.setItem('ridgeRunnerVersion', GAME_VERSION);
+  document.getElementById('updateOverlay').classList.remove('show');
+  window.__updatePending = false;
+  if(!window.__trialExpired){
+    document.getElementById('gameFrame').style.display = 'block';
+    if(typeof resize === 'function') resize();
+  }
+});
 
 let totalCoins = parseInt(safeStorage.getItem('ridgeRunnerTotalCoins')||'0', 10);
 let unlockedCars = (()=>{
@@ -792,6 +843,7 @@ let featureType = null;     // 'hill' | 'valley' | null
 let pendingBridgeIdx = null;
 let nextFeatureX = 1100;
 let scheduledRockXs = [];   // world-x positions for rocks planted just past a hill's landing zone
+let nextMidRockX = 1500;    // world-x for the next independent mid-road rock (cleared via manual JUMP)
 
 function pushPoint(){
   const cfg = DIFFICULTY[difficulty];
@@ -842,7 +894,7 @@ function pushPoint(){
       featureQueue = [-peak*0.35, -peak*0.7, -peak, -peak*0.28, 0];
       // plant a rock right in the landing zone on some hills — clearing the jump is what clears it
       if(Math.random() < 0.45){
-        scheduledRockXs.push(dist + 3.65*SEGMENT);
+        scheduledRockXs.push(dist + 3.4*SEGMENT);
       }
     } else {
       featureType = 'valley';
@@ -885,8 +937,9 @@ let fuelPickups = [];
 let rocks = [];
 let rockWarningShown = false;
 let nextCoinX = 500;
-let nextFuelX = 1400;
-const ROCK_HEIGHT = 20; // clearance the truck needs to clear a rock without hitting it
+let nextFuelX = 2600;
+function currentRockHeight(){ return DIFFICULTY[difficulty].rockHeight; }
+const ROCK_HEIGHT = 20; // fixed baseline used only for the rock's drawn size (collision uses currentRockHeight())
 
 function maybeSpawnCoins(worldX){
   while(nextCoinX < worldX + W + 400){
@@ -899,7 +952,7 @@ function maybeSpawnCoins(worldX){
   }
   while(nextFuelX < worldX + W + 400){
     fuelPickups.push({x:nextFuelX, y:surfaceY(nextFuelX)-34, taken:false});
-    nextFuelX += 1100 + Math.random()*900;
+    nextFuelX += 6500 + Math.random()*3500;
   }
   // rocks are scheduled by the terrain generator itself, just past a hill's landing zone —
   // this guarantees every rock is actually clearable by the jump that put it there
@@ -909,6 +962,15 @@ function maybeSpawnCoins(worldX){
       rocks.push({x:rx, resolved:false});
       scheduledRockXs.splice(k,1);
     }
+  }
+  // extra rocks planted out on their own, away from any hill — these are cleared with the
+  // manual JUMP button instead of a hill launch, so they don't always land right after one
+  while(nextMidRockX < worldX + W + 400){
+    const tooCloseToHillRock = scheduledRockXs.some(rx => Math.abs(rx-nextMidRockX) < 500)
+      || rocks.some(r => Math.abs(r.x-nextMidRockX) < 500);
+    if(!tooCloseToHillRock) rocks.push({x:nextMidRockX, resolved:false});
+    const gap = difficulty==='hard' ? 1300 : difficulty==='easy' ? 2600 : 1900;
+    nextMidRockX += gap + Math.random()*gap;
   }
 }
 
@@ -963,7 +1025,7 @@ let truck = {
   spin:0,
   airTime:0,
   crashTimer:null, crashReason:null, tumbleVel:0, crashSink:0,
-  jumpCooldown:0, groundedTimer:0,
+  jumpCooldown:0, groundedTimer:0, jumpBufferTimer:0,
 };
 
 let fuel=100, coinsCollected=0, distanceM=0;
@@ -973,7 +1035,7 @@ document.getElementById('bestStart').textContent = bestDistance;
 refreshCarRow();
 
 function resetGame(){
-  terrain=[]; bridges=[]; featureQueue=[]; featureType=null; pendingBridgeIdx=null; nextFeatureX=1100; scheduledRockXs=[];
+  terrain=[]; bridges=[]; featureQueue=[]; featureType=null; pendingBridgeIdx=null; nextFeatureX=1100; scheduledRockXs=[]; nextMidRockX=1500;
   for(let k=0;k<6;k++) pushPoint();
   ensureTerrain(0); // make sure terrain covers the full visible screen width right away, not just the first 6 points
   coins=[]; fuelPickups=[]; rocks=[]; nextCoinX=500; nextFuelX=1400; dustParticles=[];
@@ -983,6 +1045,7 @@ function resetGame(){
   truck.wheelYFront = surfaceY(TRUCK_SCREEN_X()+WHEEL_BASE/2) - WHEEL_R;
   truck.velRear=0; truck.velFront=0; truck.angle=0; truck.spin=0; truck.airTime=0;
   truck.crashTimer=null; truck.crashReason=null; truck.tumbleVel=0; truck.crashSink=0; truck.jumpCooldown=0; truck.groundedTimer=0;
+  truck.jumpBufferTimer=0;
   fuel=100; coinsCollected=0; distanceM=0;
   updateHUD();
 }
@@ -1002,7 +1065,13 @@ resetGame();
 })();
 
 /* ---------------- Input ---------------- */
-let input = {gas:false, brake:false, jump:false};
+let input = {gas:false, brake:false};
+
+// jump is buffered directly at the moment of input (not polled as a held state) — this guarantees
+// even a very brief tap is never silently dropped between animation frames
+function queueJump(){
+  truck.jumpBufferTimer = 0.15;
+}
 
 function bindPad(el, key){
   const on = (e)=>{ e.preventDefault(); input[key]=true; el.classList.add('active'); };
@@ -1015,18 +1084,26 @@ function bindPad(el, key){
 }
 bindPad(document.getElementById('gasBtn'), 'gas');
 bindPad(document.getElementById('brakeBtn'), 'brake');
-bindPad(document.getElementById('jumpBtn'), 'jump');
+document.getElementById('jumpBtn').addEventListener('pointerdown', (e)=>{
+  e.preventDefault();
+  document.getElementById('jumpBtn').classList.add('active');
+  queueJump();
+});
+document.getElementById('jumpBtn').addEventListener('pointerup', (e)=>{
+  e.preventDefault();
+  document.getElementById('jumpBtn').classList.remove('active');
+});
+document.getElementById('jumpBtn').addEventListener('contextmenu', e=>e.preventDefault());
 
 window.addEventListener('keydown', (e)=>{
   if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=true;
   if(['ArrowLeft','KeyA','KeyS'].includes(e.code)) input.brake=true;
-  if(['ArrowUp','KeyJ','Space'].includes(e.code)) input.jump=true;
+  if(['ArrowUp','KeyJ','Space'].includes(e.code) && !e.repeat) queueJump();
   if(e.code==='Space') e.preventDefault();
 });
 window.addEventListener('keyup', (e)=>{
   if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=false;
   if(['ArrowLeft','KeyA','KeyS'].includes(e.code)) input.brake=false;
-  if(['ArrowUp','KeyJ','Space'].includes(e.code)) input.jump=false;
 });
 
 /* ---------------- Audio (tiny, synthesized) ---------------- */
@@ -1325,11 +1402,15 @@ function updatePhysics(dt){
   // manual jump — an upward kick the player can trigger on demand, only while (recently) grounded and off cooldown.
   // A short grace window after leaving the ground ("coyote time") is used instead of requiring pixel-perfect
   // contact at the exact instant of the press — otherwise normal terrain bumps make presses feel ignored.
+  // The buffer itself is set the instant the input event fires (see queueJump), not polled here — so even a
+  // very brief tap that lasts less than one animation frame can never be silently dropped.
   if(truck.jumpCooldown>0) truck.jumpCooldown -= dt;
-  if(input.jump && truck.jumpCooldown<=0 && truck.groundedTimer < 0.25){
+  if(truck.jumpBufferTimer>0) truck.jumpBufferTimer -= dt;
+  if(truck.jumpBufferTimer>0 && truck.jumpCooldown<=0 && truck.groundedTimer < 0.25){
     truck.velRear -= JUMP_IMPULSE;
     truck.velFront -= JUMP_IMPULSE;
     truck.jumpCooldown = 0.4;
+    truck.jumpBufferTimer = 0;
     truck.groundedTimer = 999; // consumed — can't chain another jump until back on the ground
     jumpSound();
   }
@@ -1400,7 +1481,7 @@ function updatePhysics(dt){
     if(r.resolved) continue;
     const dx = r.x - truck.worldX;
     if(Math.abs(dx) < 26){
-      if(clearance < ROCK_HEIGHT){
+      if(clearance < currentRockHeight()){
         startCrashTumble('HIT A ROCK');
         return;
       }
