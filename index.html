@@ -274,23 +274,22 @@
   #distTicker .hud-value{font-size:clamp(22px,calc(var(--frame-w) * 0.05),30px);}
 
   #rockWarning{
-    position:absolute; top:calc(66px + env(safe-area-inset-top)); left:14px;
+    position:absolute; top:calc(56px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
     z-index:5; pointer-events:none;
-    font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.04em;
-    font-size:clamp(12px,calc(var(--frame-w) * 0.028),15px); color:#2b1000;
+    font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.05em;
+    font-size:clamp(14px,calc(var(--frame-w) * 0.036),18px); color:#2b1000;
     background:linear-gradient(180deg,#ffd23f,#ff7a1a);
     border:2px solid #fff3c4;
     border-radius:8px;
-    padding:5px 12px;
-    max-width:150px;
+    padding:6px 16px;
     box-shadow:0 4px 14px rgba(0,0,0,.4);
     opacity:0; transition:opacity .15s ease;
     animation:rockWarnPulse .5s ease-in-out infinite;
   }
   #rockWarning.show{opacity:1;}
   @keyframes rockWarnPulse{
-    0%,100%{transform:scale(1);}
-    50%{transform:scale(1.06);}
+    0%,100%{transform:translateX(-50%) scale(1);}
+    50%{transform:translateX(-50%) scale(1.06);}
   }
 
   #crashFlash{
@@ -382,7 +381,7 @@
   <div class="hud-value"><span id="distVal">0</span> m</div>
 </div>
 
-<div id="rockWarning">⚠ ROCK AHEAD!</div>
+<div id="rockWarning">⚠ ROCK AHEAD — GAIN SPEED!</div>
 
 <div id="hud">
   <div class="hud-panel" id="fuelWrap">
@@ -608,9 +607,9 @@ const LANDING_ABSORB = 0.18;   // how much velocity survives a landing impact
 const rpmNeedleEl = document.getElementById('rpmNeedle');
 
 const DIFFICULTY = {
-  easy:   { startAmp:14, maxAmp:34,  ampGrow:5200, flatChance:0.34, clamp:80,  rockHeight:8 },
-  normal: { startAmp:22, maxAmp:50,  ampGrow:3400, flatChance:0.16, clamp:105, rockHeight:12 },
-  hard:   { startAmp:42, maxAmp:92,  ampGrow:1400, flatChance:0.04, clamp:165, rockHeight:16 },
+  easy:   { startAmp:14, maxAmp:34,  ampGrow:5200, flatChance:0.34, clamp:80 },
+  normal: { startAmp:22, maxAmp:50,  ampGrow:3400, flatChance:0.16, clamp:105 },
+  hard:   { startAmp:42, maxAmp:92,  ampGrow:1400, flatChance:0.04, clamp:165 },
 };
 let difficulty = 'normal';
 
@@ -793,7 +792,6 @@ let featureType = null;     // 'hill' | 'valley' | null
 let pendingBridgeIdx = null;
 let nextFeatureX = 1100;
 let scheduledRockXs = [];   // world-x positions for rocks planted just past a hill's landing zone
-let nextMidRockX = 1500;    // world-x for the next independent mid-road rock (cleared via manual JUMP)
 
 function pushPoint(){
   const cfg = DIFFICULTY[difficulty];
@@ -844,7 +842,7 @@ function pushPoint(){
       featureQueue = [-peak*0.35, -peak*0.7, -peak, -peak*0.28, 0];
       // plant a rock right in the landing zone on some hills — clearing the jump is what clears it
       if(Math.random() < 0.45){
-        scheduledRockXs.push(dist + 3.4*SEGMENT);
+        scheduledRockXs.push(dist + 3.65*SEGMENT);
       }
     } else {
       featureType = 'valley';
@@ -887,9 +885,8 @@ let fuelPickups = [];
 let rocks = [];
 let rockWarningShown = false;
 let nextCoinX = 500;
-let nextFuelX = 2600;
-function currentRockHeight(){ return DIFFICULTY[difficulty].rockHeight; }
-const ROCK_HEIGHT = 20; // fixed baseline used only for the rock's drawn size (collision uses currentRockHeight())
+let nextFuelX = 1400;
+const ROCK_HEIGHT = 20; // clearance the truck needs to clear a rock without hitting it
 
 function maybeSpawnCoins(worldX){
   while(nextCoinX < worldX + W + 400){
@@ -902,7 +899,7 @@ function maybeSpawnCoins(worldX){
   }
   while(nextFuelX < worldX + W + 400){
     fuelPickups.push({x:nextFuelX, y:surfaceY(nextFuelX)-34, taken:false});
-    nextFuelX += 6500 + Math.random()*3500;
+    nextFuelX += 1100 + Math.random()*900;
   }
   // rocks are scheduled by the terrain generator itself, just past a hill's landing zone —
   // this guarantees every rock is actually clearable by the jump that put it there
@@ -912,15 +909,6 @@ function maybeSpawnCoins(worldX){
       rocks.push({x:rx, resolved:false});
       scheduledRockXs.splice(k,1);
     }
-  }
-  // extra rocks planted out on their own, away from any hill — these are cleared with the
-  // manual JUMP button instead of a hill launch, so they don't always land right after one
-  while(nextMidRockX < worldX + W + 400){
-    const tooCloseToHillRock = scheduledRockXs.some(rx => Math.abs(rx-nextMidRockX) < 500)
-      || rocks.some(r => Math.abs(r.x-nextMidRockX) < 500);
-    if(!tooCloseToHillRock) rocks.push({x:nextMidRockX, resolved:false});
-    const gap = difficulty==='hard' ? 1300 : difficulty==='easy' ? 2600 : 1900;
-    nextMidRockX += gap + Math.random()*gap;
   }
 }
 
@@ -975,7 +963,7 @@ let truck = {
   spin:0,
   airTime:0,
   crashTimer:null, crashReason:null, tumbleVel:0, crashSink:0,
-  jumpCooldown:0, groundedTimer:0, jumpBufferTimer:0,
+  jumpCooldown:0, groundedTimer:0,
 };
 
 let fuel=100, coinsCollected=0, distanceM=0;
@@ -985,7 +973,7 @@ document.getElementById('bestStart').textContent = bestDistance;
 refreshCarRow();
 
 function resetGame(){
-  terrain=[]; bridges=[]; featureQueue=[]; featureType=null; pendingBridgeIdx=null; nextFeatureX=1100; scheduledRockXs=[]; nextMidRockX=1500;
+  terrain=[]; bridges=[]; featureQueue=[]; featureType=null; pendingBridgeIdx=null; nextFeatureX=1100; scheduledRockXs=[];
   for(let k=0;k<6;k++) pushPoint();
   ensureTerrain(0); // make sure terrain covers the full visible screen width right away, not just the first 6 points
   coins=[]; fuelPickups=[]; rocks=[]; nextCoinX=500; nextFuelX=1400; dustParticles=[];
@@ -995,7 +983,6 @@ function resetGame(){
   truck.wheelYFront = surfaceY(TRUCK_SCREEN_X()+WHEEL_BASE/2) - WHEEL_R;
   truck.velRear=0; truck.velFront=0; truck.angle=0; truck.spin=0; truck.airTime=0;
   truck.crashTimer=null; truck.crashReason=null; truck.tumbleVel=0; truck.crashSink=0; truck.jumpCooldown=0; truck.groundedTimer=0;
-  truck.jumpBufferTimer=0;
   fuel=100; coinsCollected=0; distanceM=0;
   updateHUD();
 }
@@ -1015,13 +1002,7 @@ resetGame();
 })();
 
 /* ---------------- Input ---------------- */
-let input = {gas:false, brake:false};
-
-// jump is buffered directly at the moment of input (not polled as a held state) — this guarantees
-// even a very brief tap is never silently dropped between animation frames
-function queueJump(){
-  truck.jumpBufferTimer = 0.15;
-}
+let input = {gas:false, brake:false, jump:false};
 
 function bindPad(el, key){
   const on = (e)=>{ e.preventDefault(); input[key]=true; el.classList.add('active'); };
@@ -1034,26 +1015,18 @@ function bindPad(el, key){
 }
 bindPad(document.getElementById('gasBtn'), 'gas');
 bindPad(document.getElementById('brakeBtn'), 'brake');
-document.getElementById('jumpBtn').addEventListener('pointerdown', (e)=>{
-  e.preventDefault();
-  document.getElementById('jumpBtn').classList.add('active');
-  queueJump();
-});
-document.getElementById('jumpBtn').addEventListener('pointerup', (e)=>{
-  e.preventDefault();
-  document.getElementById('jumpBtn').classList.remove('active');
-});
-document.getElementById('jumpBtn').addEventListener('contextmenu', e=>e.preventDefault());
+bindPad(document.getElementById('jumpBtn'), 'jump');
 
 window.addEventListener('keydown', (e)=>{
   if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=true;
   if(['ArrowLeft','KeyA','KeyS'].includes(e.code)) input.brake=true;
-  if(['ArrowUp','KeyJ','Space'].includes(e.code) && !e.repeat) queueJump();
+  if(['ArrowUp','KeyJ','Space'].includes(e.code)) input.jump=true;
   if(e.code==='Space') e.preventDefault();
 });
 window.addEventListener('keyup', (e)=>{
   if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=false;
   if(['ArrowLeft','KeyA','KeyS'].includes(e.code)) input.brake=false;
+  if(['ArrowUp','KeyJ','Space'].includes(e.code)) input.jump=false;
 });
 
 /* ---------------- Audio (tiny, synthesized) ---------------- */
@@ -1352,15 +1325,11 @@ function updatePhysics(dt){
   // manual jump — an upward kick the player can trigger on demand, only while (recently) grounded and off cooldown.
   // A short grace window after leaving the ground ("coyote time") is used instead of requiring pixel-perfect
   // contact at the exact instant of the press — otherwise normal terrain bumps make presses feel ignored.
-  // The buffer itself is set the instant the input event fires (see queueJump), not polled here — so even a
-  // very brief tap that lasts less than one animation frame can never be silently dropped.
   if(truck.jumpCooldown>0) truck.jumpCooldown -= dt;
-  if(truck.jumpBufferTimer>0) truck.jumpBufferTimer -= dt;
-  if(truck.jumpBufferTimer>0 && truck.jumpCooldown<=0 && truck.groundedTimer < 0.25){
+  if(input.jump && truck.jumpCooldown<=0 && truck.groundedTimer < 0.25){
     truck.velRear -= JUMP_IMPULSE;
     truck.velFront -= JUMP_IMPULSE;
     truck.jumpCooldown = 0.4;
-    truck.jumpBufferTimer = 0;
     truck.groundedTimer = 999; // consumed — can't chain another jump until back on the ground
     jumpSound();
   }
@@ -1431,7 +1400,7 @@ function updatePhysics(dt){
     if(r.resolved) continue;
     const dx = r.x - truck.worldX;
     if(Math.abs(dx) < 26){
-      if(clearance < currentRockHeight()){
+      if(clearance < ROCK_HEIGHT){
         startCrashTumble('HIT A ROCK');
         return;
       }
