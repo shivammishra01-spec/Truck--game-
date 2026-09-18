@@ -620,6 +620,12 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=> setTimeout(resize, 50));
 resize();
 
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{}); // safe to ignore if blocked (e.g. file://)
+  });
+}
+
 /* ---------------- Terrain generation ---------------- */
 const SEGMENT = 150;
 const GROUND_BASE_FRAC = 0.66; // fraction of screen height for baseline ground
